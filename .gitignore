@@ -39,6 +39,7 @@ coverage.xml
 *.coverage
 *.coveragexml
 *.trx
+*.http
 
 # NuGet
 *.nupkg
