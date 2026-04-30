@@ -149,4 +149,196 @@ public class AdminUsersController : ControllerBase
             new { user.UserId }
         )).ToList();
     }
+
+    [HttpPost]
+    public async Task<ActionResult<UserListItemDto>> CreateUser(CreateUserRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Username))
+            return BadRequest("Username is required.");
+
+        if (string.IsNullOrWhiteSpace(request.Email))
+            return BadRequest("Email is required.");
+
+        if (string.IsNullOrWhiteSpace(request.Password))
+            return BadRequest("Password is required.");
+
+        if (string.IsNullOrWhiteSpace(request.FirstName))
+            return BadRequest("First name is required.");
+
+        if (string.IsNullOrWhiteSpace(request.LastName))
+            return BadRequest("Last name is required.");
+
+        if (string.IsNullOrWhiteSpace(request.Role))
+            return BadRequest("Role is required.");
+
+        var roleId = await _db.QuerySingleOrDefaultAsync<int?>(
+            """
+        SELECT role_id
+        FROM roles
+        WHERE role_name = @Role
+        LIMIT 1;
+        """,
+            new { request.Role }
+        );
+
+        if (roleId is null)
+            return BadRequest("Invalid role.");
+
+        var existingUser = await _db.QuerySingleOrDefaultAsync<string>(
+            """
+        SELECT CAST(user_id AS CHAR)
+        FROM users
+        WHERE username = @Username OR email = @Email
+        LIMIT 1;
+        """,
+            new
+            {
+                request.Username,
+                request.Email
+            }
+        );
+
+        if (existingUser is not null)
+            return Conflict("A user with this username or email already exists.");
+
+        var userId = Guid.NewGuid().ToString();
+        var passwordHash = BCrypt.Net.BCrypt.HashPassword(request.Password, workFactor: 12);
+
+        await _db.OpenAsync();
+
+        using var transaction = await _db.BeginTransactionAsync();
+
+        try
+        {
+            await _db.ExecuteAsync(
+                """
+            INSERT INTO users (
+                user_id,
+                username,
+                email,
+                password_hash,
+                first_name,
+                last_name,
+                telephone,
+                is_active
+            )
+            VALUES (
+                @UserId,
+                @Username,
+                @Email,
+                @PasswordHash,
+                @FirstName,
+                @LastName,
+                @Telephone,
+                TRUE
+            );
+            """,
+                new
+                {
+                    UserId = userId,
+                    request.Username,
+                    request.Email,
+                    PasswordHash = passwordHash,
+                    request.FirstName,
+                    request.LastName,
+                    request.Telephone
+                },
+                transaction
+            );
+
+            await _db.ExecuteAsync(
+                """
+            INSERT INTO user_roles (
+                user_id,
+                role_id
+            )
+            VALUES (
+                @UserId,
+                @RoleId
+            );
+            """,
+                new
+                {
+                    UserId = userId,
+                    RoleId = roleId.Value
+                },
+                transaction
+            );
+
+            if (!string.IsNullOrWhiteSpace(request.Position))
+            {
+                await _db.ExecuteAsync(
+                    """
+                INSERT INTO staff_profiles (
+                    user_id,
+                    position
+                )
+                VALUES (
+                    @UserId,
+                    @Position
+                );
+                """,
+                    new
+                    {
+                        UserId = userId,
+                        request.Position
+                    },
+                    transaction
+                );
+            }
+
+            foreach (var customerNo in request.CustomerNos.Distinct())
+            {
+                await _db.ExecuteAsync(
+                    """
+                INSERT INTO user_customer_access (
+                    user_id,
+                    customer_no
+                )
+                VALUES (
+                    @UserId,
+                    @CustomerNo
+                );
+                """,
+                    new
+                    {
+                        UserId = userId,
+                        CustomerNo = customerNo
+                    },
+                    transaction
+                );
+            }
+
+            foreach (var siteId in request.SiteIds.Distinct())
+            {
+                await _db.ExecuteAsync(
+                    """
+                INSERT INTO user_site_access (
+                    user_id,
+                    site_id
+                )
+                VALUES (
+                    @UserId,
+                    @SiteId
+                );
+                """,
+                    new
+                    {
+                        UserId = userId,
+                        SiteId = siteId
+                    },
+                    transaction
+                );
+            }
+
+            await transaction.CommitAsync();
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+
+        return await GetUserById(userId);
+    }
 }
