@@ -55,6 +55,7 @@ builder.Services.AddScoped<IAdminUserReadService, AdminUserReadService>();
 builder.Services.AddScoped<IAdminUserCreateService, AdminUserCreateService>();
 builder.Services.AddScoped<IAdminUserUpdateService, AdminUserUpdateService>();
 builder.Services.AddScoped<IAdminUserStatusService, AdminUserStatusService>();
+builder.Services.AddScoped<IAdminUserPasswordService, AdminUserPasswordService>();
 
 var app = builder.Build();
 

@@ -14,19 +14,23 @@ public class AdminUsersController : ControllerBase
     private readonly IAdminUserCreateService _createService;
     private readonly IAdminUserUpdateService _updateService;
     private readonly IAdminUserStatusService _statusService;
+    private readonly IAdminUserPasswordService _passwordService;
 
     public AdminUsersController(
         IAdminUserReadService readService,
         IAdminUserCreateService createService,
         IAdminUserUpdateService updateService,
-        IAdminUserStatusService statusService)
+        IAdminUserStatusService statusService,
+        IAdminUserPasswordService passwordService)
     {
         _readService = readService;
         _createService = createService;
         _updateService = updateService;
         _statusService = statusService;
+        _passwordService = passwordService;
     }
 
+    // get all users
     [HttpGet]
     public async Task<ActionResult<List<UserListItemDto>>> GetUsers([FromQuery] UserFilters filters)
     {
@@ -34,6 +38,7 @@ public class AdminUsersController : ControllerBase
         return Ok(users);
     }
 
+    // get specific user by id
     [HttpGet("{userId}")]
     public async Task<ActionResult<UserListItemDto>> GetUserById(string userId)
     {
@@ -45,6 +50,7 @@ public class AdminUsersController : ControllerBase
         return Ok(user);
     }
 
+    // create new user
     [HttpPost]
     public async Task<ActionResult<UserListItemDto>> CreateUser(CreateUserRequest request)
     {
@@ -56,6 +62,7 @@ public class AdminUsersController : ControllerBase
         return StatusCode(result.StatusCode, result.Data);
     }
 
+    // update specific user attribute(s)
     [HttpPatch("{userId}")]
     public async Task<ActionResult<UserListItemDto>> UpdateUser(
         string userId,
@@ -69,12 +76,27 @@ public class AdminUsersController : ControllerBase
         return Ok(result.Data);
     }
 
+    // update user "isActive" status true/false
     [HttpPatch("{userId}/status")]
     public async Task<IActionResult> UpdateUserStatus(
         string userId,
         UpdateUserStatusRequest request)
     {
         var result = await _statusService.UpdateUserStatus(userId, request);
+
+        if (!result.Success)
+            return StatusCode(result.StatusCode, result.Error);
+
+        return Ok(result.Data);
+    }
+
+    // reset user password 
+    [HttpPost("{userId}/reset-password")]
+    public async Task<IActionResult> ResetPassword(
+    string userId,
+    ResetPasswordRequest request)
+    {
+        var result = await _passwordService.ResetPassword(userId, request);
 
         if (!result.Success)
             return StatusCode(result.StatusCode, result.Error);
