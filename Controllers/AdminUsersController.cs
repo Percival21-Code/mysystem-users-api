@@ -45,4 +45,17 @@ public class AdminUsersController : ControllerBase
 
         return StatusCode(result.StatusCode, result.Data);
     }
+
+    [HttpPatch("{userId}/status")]
+    public async Task<IActionResult> UpdateUserStatus(
+    string userId,
+    UpdateUserStatusRequest request)
+    {
+        var result = await _adminUserService.UpdateUserStatus(userId, request);
+
+        if (!result.Success)
+            return StatusCode(result.StatusCode, result.Error);
+
+        return Ok(result.Data);
+    }
 }
