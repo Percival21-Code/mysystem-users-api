@@ -17,6 +17,7 @@ public class AdminUsersController : ControllerBase
         _adminUserService = adminUserService;
     }
 
+    // get all users
     [HttpGet]
     public async Task<ActionResult<List<UserListItemDto>>> GetUsers([FromQuery] UserFilters filters)
     {
@@ -24,6 +25,7 @@ public class AdminUsersController : ControllerBase
         return Ok(users);
     }
 
+    // get an individual user via ID
     [HttpGet("{userId}")]
     public async Task<ActionResult<UserListItemDto>> GetUserById(string userId)
     {
@@ -35,6 +37,7 @@ public class AdminUsersController : ControllerBase
         return Ok(user);
     }
 
+    // create new user
     [HttpPost]
     public async Task<ActionResult<UserListItemDto>> CreateUser(CreateUserRequest request)
     {
@@ -46,12 +49,27 @@ public class AdminUsersController : ControllerBase
         return StatusCode(result.StatusCode, result.Data);
     }
 
+    // update user status
     [HttpPatch("{userId}/status")]
     public async Task<IActionResult> UpdateUserStatus(
     string userId,
     UpdateUserStatusRequest request)
     {
         var result = await _adminUserService.UpdateUserStatus(userId, request);
+
+        if (!result.Success)
+            return StatusCode(result.StatusCode, result.Error);
+
+        return Ok(result.Data);
+    }
+
+    // update user attribute(s)
+    [HttpPatch("{userId}")]
+    public async Task<ActionResult<UserListItemDto>> UpdateUser(
+    string userId,
+    UpdateUserRequest request)
+    {
+        var result = await _adminUserService.UpdateUser(userId, request);
 
         if (!result.Success)
             return StatusCode(result.StatusCode, result.Error);

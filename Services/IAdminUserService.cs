@@ -8,4 +8,5 @@ public interface IAdminUserService
     Task<UserListItemDto?> GetUserById(string userId);
     Task<ServiceResult<UserListItemDto>> CreateUser(CreateUserRequest request);
     Task<ServiceResult<object>> UpdateUserStatus(string userId, UpdateUserStatusRequest request);
+    Task<ServiceResult<UserListItemDto>> UpdateUser(string userId, UpdateUserRequest request);
 }
