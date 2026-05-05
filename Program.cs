@@ -2,7 +2,8 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using MySqlConnector;
-using mysystem_user_api.Services;
+using mysystem_user_api.Services.Interfaces;
+using mysystem_user_api.Services.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -50,7 +51,10 @@ builder.Services.AddAuthorization(options =>
     });
 });
 
-builder.Services.AddScoped<IAdminUserService, AdminUserService>();
+builder.Services.AddScoped<IAdminUserReadService, AdminUserReadService>();
+builder.Services.AddScoped<IAdminUserCreateService, AdminUserCreateService>();
+builder.Services.AddScoped<IAdminUserUpdateService, AdminUserUpdateService>();
+builder.Services.AddScoped<IAdminUserStatusService, AdminUserStatusService>();
 
 var app = builder.Build();
 
