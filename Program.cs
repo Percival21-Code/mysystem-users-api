@@ -51,11 +51,13 @@ builder.Services.AddAuthorization(options =>
     });
 });
 
+// add services
 builder.Services.AddScoped<IAdminUserReadService, AdminUserReadService>();
 builder.Services.AddScoped<IAdminUserCreateService, AdminUserCreateService>();
 builder.Services.AddScoped<IAdminUserUpdateService, AdminUserUpdateService>();
 builder.Services.AddScoped<IAdminUserStatusService, AdminUserStatusService>();
 builder.Services.AddScoped<IAdminUserPasswordService, AdminUserPasswordService>();
+builder.Services.AddScoped<IAdminRoleService, AdminRoleService>();
 
 var app = builder.Build();
 
