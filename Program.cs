@@ -59,9 +59,29 @@ builder.Services.AddScoped<IAdminUserStatusService, AdminUserStatusService>();
 builder.Services.AddScoped<IAdminUserPasswordService, AdminUserPasswordService>();
 builder.Services.AddScoped<IAdminRoleService, AdminRoleService>();
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("FrontendCors", policy =>
+    {
+        policy
+            .WithOrigins(
+                "http://localhost:5173",
+                "https://mysystem.thekirbygroup.co.uk",
+                "https://mysystem.info"
+            )
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+    });
+});
+
 var app = builder.Build();
 
 app.UseHttpsRedirection();
+
+app.UseCors("FrontendCors");
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.UseAuthentication();
 app.UseAuthorization();
