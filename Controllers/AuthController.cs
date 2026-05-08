@@ -65,8 +65,8 @@ public class AuthController : ControllerBase
             new { user.UserId }
         )).ToList();
 
-        if (!roles.Contains("Administrator"))
-            return Forbid("Only Administrator users can access this API.");
+        if (!roles.Any())
+            return Unauthorized("User has no assigned role.");
 
         var token = GenerateJwt(user, roles);
 
@@ -86,7 +86,7 @@ public class AuthController : ControllerBase
     }
 
     [HttpGet("me")]
-    [Authorize(Policy = "AdministratorOnly")]
+    [Authorize]
     public IActionResult Me()
     {
         return Ok(new
@@ -94,6 +94,8 @@ public class AuthController : ControllerBase
             userId = User.FindFirstValue(ClaimTypes.NameIdentifier),
             username = User.FindFirstValue(ClaimTypes.Name),
             email = User.FindFirstValue(ClaimTypes.Email),
+            firstName = User.FindFirstValue("firstName"),
+            lastName = User.FindFirstValue("lastName"),
             roles = User.FindAll(ClaimTypes.Role).Select(r => r.Value).ToList()
         });
     }
