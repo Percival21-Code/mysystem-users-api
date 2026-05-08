@@ -59,6 +59,9 @@ builder.Services.AddScoped<IAdminUserStatusService, AdminUserStatusService>();
 builder.Services.AddScoped<IAdminUserPasswordService, AdminUserPasswordService>();
 builder.Services.AddScoped<IAdminRoleService, AdminRoleService>();
 
+// middleware authentication service
+builder.Services.AddHttpClient<IMiddlewareAuthService, MiddlewareAuthService>();
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("FrontendCors", policy =>
