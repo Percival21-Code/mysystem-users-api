@@ -59,6 +59,9 @@ builder.Services.AddScoped<IAdminUserStatusService, AdminUserStatusService>();
 builder.Services.AddScoped<IAdminUserPasswordService, AdminUserPasswordService>();
 builder.Services.AddScoped<IAdminRoleService, AdminRoleService>();
 
+// mmapi client
+builder.Services.AddHttpClient<IMiddlewareSitesService, MiddlewareSitesService>();
+
 // middleware authentication service
 builder.Services.AddHttpClient<IMiddlewareAuthService, MiddlewareAuthService>();
 
@@ -69,6 +72,7 @@ builder.Services.AddCors(options =>
         policy
             .WithOrigins(
                 "http://localhost:5173",
+                "http://localhost:5174",
                 "https://mysystem.thekirbygroup.co.uk",
                 "https://mysystem.info"
             )
