@@ -1,4 +1,4 @@
-﻿namespace mysystem_user_api.Models.Auth
+﻿namespace mysystem_bff.Models.Auth
 {
     public class LoginResponse
     {

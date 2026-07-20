@@ -1,14 +1,14 @@
-﻿using Dapper;
+﻿namespace mysystem_bff.Controllers;
+
+using Dapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 using MySqlConnector;
-using mysystem_user_api.Models.Auth;
+using mysystem_bff.Models.Auth;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-
-namespace mysystem_user_api.Controllers;
 
 [ApiController]
 [Route("api/auth")]

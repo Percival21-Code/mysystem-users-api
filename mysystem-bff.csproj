@@ -4,7 +4,8 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <RootNamespace>mysystem_user_api</RootNamespace>
+    <RootNamespace>mysystem_bff</RootNamespace>
+	<AssemblyName>mysystem_bff</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>

@@ -2,8 +2,8 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using MySqlConnector;
-using mysystem_user_api.Services.Interfaces;
-using mysystem_user_api.Services.Services;
+using mysystem_bff.Services.Interfaces;
+using mysystem_bff.Services.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 

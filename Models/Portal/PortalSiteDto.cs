@@ -1,4 +1,4 @@
-﻿namespace mysystem_user_api.Models.Portal;
+﻿namespace mysystem_bff.Models.Portal;
 
 public class PortalSiteDto
 {

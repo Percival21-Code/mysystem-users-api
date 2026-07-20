@@ -1,4 +1,4 @@
-﻿namespace mysystem_user_api.Models.Admin;
+﻿namespace mysystem_bff.Models.Admin;
 
 public class UserFilters
 {

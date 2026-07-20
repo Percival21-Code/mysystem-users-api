@@ -1,8 +1,8 @@
 namespace mysystem_bff.Models.Middleware;
 
-public class MiddlewareSitesResponse
+public class MiddlewareCallsResponse
 {
-    public List<MiddlewareSite> Items { get; set; } = [];
+    public List<MiddlewareCall> Items { get; set; } = [];
     public int Page { get; set; }
     public int PageSize { get; set; }
     public int Total { get; set; }

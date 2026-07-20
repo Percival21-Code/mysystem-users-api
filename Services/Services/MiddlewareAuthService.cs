@@ -1,9 +1,9 @@
 ﻿using System.Net.Http.Json;
-using mysystem_user_api.Models.Admin;
-using mysystem_user_api.Models.Middleware;
-using mysystem_user_api.Services.Interfaces;
+using mysystem_bff.Models.Admin;
+using mysystem_bff.Models.Middleware;
+using mysystem_bff.Services.Interfaces;
 
-namespace mysystem_user_api.Services.Services;
+namespace mysystem_bff.Services.Services;
 
 public class MiddlewareAuthService : IMiddlewareAuthService
 {

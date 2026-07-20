@@ -1,4 +1,4 @@
-namespace mysystem_user_api.Models.Middleware;
+namespace mysystem_bff.Models.Middleware;
 
 public class MiddlewareSite
 {
