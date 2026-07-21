@@ -5,7 +5,7 @@ public class PortalCallDto
     public int CallNumber { get; set; }
     public char CallType { get; set; }
     public char CallStatus { get; set; }
-    public required string? SiteID { get; set; } = null!;
+    public string SiteId { get; set; } = "";
     public DateTime? LoggedDate { get; set; }
     public string? LoggingOperator { get; set; }
     public string? Engineer { get; set; }

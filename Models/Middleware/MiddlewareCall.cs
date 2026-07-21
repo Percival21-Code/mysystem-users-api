@@ -10,15 +10,11 @@ public class MiddlewareCall
     public string? LoggingOperator { get; set; }
     public string? Engineer { get; set; }
     public string? SystemType { get; set; }
-
-    // more information
     public DateTime? CompletedDate { get; set; }
     public string? CustomerReference { get; set; }
     public string? InvoiceNo { get; set; }
     public string? LoggedRemarks { get; set; }
-    public string? CompletedRemarks { get; set; } // admin notes
-
-    // maintenance info
+    public string? CompletedRemarks { get; set; }
     public DateTime? PreviousMaintenanceDate { get; set; }
     public DateTime? NextMaintenanceDate { get; set; }
 }

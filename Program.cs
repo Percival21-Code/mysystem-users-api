@@ -61,6 +61,7 @@ builder.Services.AddScoped<IAdminRoleService, AdminRoleService>();
 
 // mmapi client
 builder.Services.AddHttpClient<IMiddlewareSitesService, MiddlewareSitesService>();
+builder.Services.AddHttpClient<IMiddlewareCallsService, MiddlewareCallsService>();
 
 // middleware authentication service
 builder.Services.AddHttpClient<IMiddlewareAuthService, MiddlewareAuthService>();
