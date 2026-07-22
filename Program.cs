@@ -58,6 +58,7 @@ builder.Services.AddScoped<IAdminUserUpdateService, AdminUserUpdateService>();
 builder.Services.AddScoped<IAdminUserStatusService, AdminUserStatusService>();
 builder.Services.AddScoped<IAdminUserPasswordService, AdminUserPasswordService>();
 builder.Services.AddScoped<IAdminRoleService, AdminRoleService>();
+builder.Services.AddScoped<IPortalAccessService, PortalAccessService>();
 
 // mmapi client
 builder.Services.AddHttpClient<IMiddlewareSitesService, MiddlewareSitesService>();
