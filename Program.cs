@@ -63,6 +63,7 @@ builder.Services.AddScoped<IPortalAccessService, PortalAccessService>();
 // mmapi client
 builder.Services.AddHttpClient<IMiddlewareSitesService, MiddlewareSitesService>();
 builder.Services.AddHttpClient<IMiddlewareCallsService, MiddlewareCallsService>();
+builder.Services.AddHttpClient<IMiddlewareSiteSystemsService, MiddlewareSiteSystemsService>();
 
 // middleware authentication service
 builder.Services.AddHttpClient<IMiddlewareAuthService, MiddlewareAuthService>();
