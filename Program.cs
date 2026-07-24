@@ -64,6 +64,7 @@ builder.Services.AddScoped<IPortalAccessService, PortalAccessService>();
 builder.Services.AddHttpClient<IMiddlewareSitesService, MiddlewareSitesService>();
 builder.Services.AddHttpClient<IMiddlewareCallsService, MiddlewareCallsService>();
 builder.Services.AddHttpClient<IMiddlewareSiteSystemsService, MiddlewareSiteSystemsService>();
+builder.Services.AddHttpClient<IMiddlewareReferenceService, MiddlewareReferenceService>();
 
 // middleware authentication service
 builder.Services.AddHttpClient<IMiddlewareAuthService, MiddlewareAuthService>();
