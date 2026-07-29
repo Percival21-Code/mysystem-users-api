@@ -4,8 +4,31 @@ using Microsoft.IdentityModel.Tokens;
 using MySqlConnector;
 using mysystem_bff.Services.Interfaces;
 using mysystem_bff.Services.Services;
+using Serilog;
+
+// ======================================================================
+
+// configure serilog
+
+var logPath = Path.Combine(AppContext.BaseDirectory, "logs", "log-.txt");
+
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Information()
+    .WriteTo.File(
+        logPath,
+        rollingInterval: RollingInterval.Day,
+        retainedFileCountLimit: 62,
+        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss} [{Level}] {Message}{NewLine}{Exception}"
+    )
+    .CreateLogger();
+
+// ======================================================================
+
+// configure builder
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Host.UseSerilog();
 
 builder.Configuration.AddJsonFile("secrets.json", optional: true, reloadOnChange: true);
 
@@ -16,6 +39,10 @@ builder.Services.AddScoped<MySqlConnection>(_ =>
     var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
     return new MySqlConnection(connectionString);
 });
+
+// ======================================================================
+
+// authentication / authorisation
 
 var jwtKey = builder.Configuration["Jwt:Key"];
 
@@ -51,7 +78,10 @@ builder.Services.AddAuthorization(options =>
     });
 });
 
-// add services
+// ======================================================================
+
+// local data services
+
 builder.Services.AddScoped<IAdminUserReadService, AdminUserReadService>();
 builder.Services.AddScoped<IAdminUserCreateService, AdminUserCreateService>();
 builder.Services.AddScoped<IAdminUserUpdateService, AdminUserUpdateService>();
@@ -60,14 +90,26 @@ builder.Services.AddScoped<IAdminUserPasswordService, AdminUserPasswordService>(
 builder.Services.AddScoped<IAdminRoleService, AdminRoleService>();
 builder.Services.AddScoped<IPortalAccessService, PortalAccessService>();
 
-// mmapi client
+// usage tracking / logging services
+
+builder.Services.AddSingleton<EndpointUsageTracker>();
+builder.Services.AddHostedService<EndpointUsageWriterService>();
+
+// mmapi data services
+
 builder.Services.AddHttpClient<IMiddlewareSitesService, MiddlewareSitesService>();
 builder.Services.AddHttpClient<IMiddlewareCallsService, MiddlewareCallsService>();
 builder.Services.AddHttpClient<IMiddlewareSiteSystemsService, MiddlewareSiteSystemsService>();
 builder.Services.AddHttpClient<IMiddlewareReferenceService, MiddlewareReferenceService>();
+builder.Services.AddHttpClient<IMiddlewareSmsService, MiddlewareSmsService>();
 
-// middleware authentication service
+// mmapi authentication service
+
 builder.Services.AddHttpClient<IMiddlewareAuthService, MiddlewareAuthService>();
+
+// ======================================================================
+
+// CORS Policies - allow web traffic
 
 builder.Services.AddCors(options =>
 {
@@ -85,15 +127,42 @@ builder.Services.AddCors(options =>
     });
 });
 
-var app = builder.Build();
+// ======================================================================
 
-app.UseHttpsRedirection();
+// build project
 
-app.UseCors("FrontendCors");
+try
+{
+    var app = builder.Build();
 
-app.UseAuthentication();
-app.UseAuthorization();
+    app.UseSerilogRequestLogging();
+    app.UseHttpsRedirection();
+    app.UseCors("FrontendCors");
+    app.UseAuthentication();
 
-app.MapControllers();
+    // track user endpoint usage
+    app.Use(async (context, next) => 
+    {
+        await next();
 
-app.Run();
+        var tracker =
+            context.RequestServices
+                .GetRequiredService<EndpointUsageTracker>();
+
+        tracker.Record(context);
+    });
+
+    app.UseAuthorization();
+    app.MapControllers();
+
+    app.Run();
+} 
+catch (Exception ex)
+{
+    Log.Fatal(ex, "Application terminated unexpectedly.");
+}
+finally
+{
+    Log.CloseAndFlush();
+}
+
