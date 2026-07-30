@@ -14,7 +14,6 @@ public class PortalCallDto
     public string? CustomerReference { get; set; }
     public string? InvoiceNo { get; set; }
     public string? LoggedRemarks { get; set; }
-    public string? CompletedRemarks { get; set; }
     public DateTime? PreviousMaintenanceDate { get; set; }
     public DateTime? NextMaintenanceDate { get; set; }
 }

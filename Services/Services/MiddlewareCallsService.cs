@@ -218,7 +218,6 @@ public class MiddlewareCallsService : IMiddlewareCallsService
             CustomerReference = call.CustomerReference,
             InvoiceNo = call.InvoiceNo,
             LoggedRemarks = call.LoggedRemarks,
-            CompletedRemarks = call.CompletedRemarks,
             PreviousMaintenanceDate = call.PreviousMaintenanceDate,
             NextMaintenanceDate = call.NextMaintenanceDate
         };
