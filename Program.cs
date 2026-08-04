@@ -102,6 +102,7 @@ builder.Services.AddHttpClient<IMiddlewareCallsService, MiddlewareCallsService>(
 builder.Services.AddHttpClient<IMiddlewareSiteSystemsService, MiddlewareSiteSystemsService>();
 builder.Services.AddHttpClient<IMiddlewareReferenceService, MiddlewareReferenceService>();
 builder.Services.AddHttpClient<IMiddlewareSmsService, MiddlewareSmsService>();
+builder.Services.AddHttpClient<IMiddlewareCallActionsService, MiddlewareCallActionsService>();
 
 // mmapi authentication service
 
