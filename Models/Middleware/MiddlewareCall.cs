@@ -3,8 +3,8 @@ namespace mysystem_bff.Models.Middleware;
 public class MiddlewareCall
 {
     public int CallNumber { get; set; }
-    public char CallType { get; set; }
-    public char CallStatus { get; set; }
+    public string? CallType { get; set; }
+    public string? CallStatus { get; set; }
     public required string? SiteID { get; set; } = null!;
     public DateTime? LoggedDate { get; set; }
     public string? LoggingOperator { get; set; }

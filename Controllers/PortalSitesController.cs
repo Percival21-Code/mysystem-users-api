@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using mysystem_bff.Models.Portal;
 using mysystem_bff.Services.Interfaces;
-using System.Reflection.Metadata.Ecma335;
 
 [ApiController]
 [Route("api/portal/sites")]

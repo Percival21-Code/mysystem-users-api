@@ -104,6 +104,10 @@ builder.Services.AddHttpClient<IMiddlewareReferenceService, MiddlewareReferenceS
 builder.Services.AddHttpClient<IMiddlewareSmsService, MiddlewareSmsService>();
 builder.Services.AddHttpClient<IMiddlewareCallActionsService, MiddlewareCallActionsService>();
 
+// frontend dashboard services
+
+builder.Services.AddScoped<IDashboardDataService, DashboardDataService>();
+
 // mmapi authentication service
 
 builder.Services.AddHttpClient<IMiddlewareAuthService, MiddlewareAuthService>();

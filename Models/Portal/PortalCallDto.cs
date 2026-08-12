@@ -3,8 +3,8 @@ namespace mysystem_bff.Models.Portal;
 public class PortalCallDto
 {
     public int CallNumber { get; set; }
-    public char CallType { get; set; }
-    public char CallStatus { get; set; }
+    public string? CallType { get; set; }
+    public string? CallStatus { get; set; }
     public string SiteId { get; set; } = "";
     public DateTime? LoggedDate { get; set; }
     public string? LoggingOperator { get; set; }
