@@ -8,4 +8,8 @@ public class PortalCallsDashboardDataDto
     public int OpenCalls { get; set; }
     public int CompletedCalls { get; set; }
     public int FurtherActions { get; set; }
+
+    public List<DashboardBreakdownItemDto> StatusBreakdown { get; set; } = [];
+    public List<DashboardBreakdownItemDto> CallTypeBreakdown { get; set; } = [];
+    public List<DashboardBreakdownItemDto> SystemTypeBreakdown { get; set; } = [];
 }
