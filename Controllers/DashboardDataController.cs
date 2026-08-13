@@ -21,60 +21,44 @@ public class DashboardDataController : ControllerBase
         _accessService = accessService;
     }
 
+    // =========================================================
+    // Calls dashboard summary
+    // =========================================================
+
     [HttpGet("calls-dashboard")]
     public async Task<ActionResult<PortalCallsDashboardDataDto>>
-        GetCallsDashboardDataAsync(
+        GetCallsDashboardData(
             [FromQuery] PortalDashboardDataQuery query,
             CancellationToken ct)
     {
-        query.Board = DashboardBoardType.CALLS_BOARD;
+        var accessResult =
+            await CheckDashboardAccess(
+                query.CustomerNo,
+                query.SiteId,
+                ct);
 
-        var customerNo =
-            query.CustomerNo?.Trim().ToUpperInvariant() ?? "";
-
-        var siteId =
-            query.SiteId?.Trim().ToUpperInvariant() ?? "";
-
-        if (string.IsNullOrWhiteSpace(customerNo) &&
-            string.IsNullOrWhiteSpace(siteId))
+        if (accessResult is not null)
         {
-            return BadRequest(
-                "Either Customer No or Site ID is required.");
+            return accessResult;
         }
 
-        if (!_accessService.HasUnrestrictedAccess(User))
-        {
-            if (!string.IsNullOrWhiteSpace(siteId))
-            {
-                var canAccessSite =
-                    await _accessService.CanAccessSite(
-                        User,
-                        siteId,
-                        ct);
+        query.CustomerNo =
+            query.CustomerNo?
+                .Trim()
+                .ToUpperInvariant()
+            ?? "";
 
-                if (!canAccessSite)
-                    return Forbid();
-            }
-            else
-            {
-                var canAccessCustomer =
-                    await _accessService.CanAccessCustomer(
-                        User,
-                        customerNo,
-                        ct);
-
-                if (!canAccessCustomer)
-                    return Forbid();
-            }
-        }
-
-        query.CustomerNo = customerNo;
-        query.SiteId = siteId;
+        query.SiteId =
+            query.SiteId?
+                .Trim()
+                .ToUpperInvariant()
+            ?? "";
 
         var result =
-            await _dashboardService.GetCallsDashboardDataAsync(
-                query,
-                ct);
+            await _dashboardService
+                .GetCallsDashboardDataAsync(
+                    query,
+                    ct);
 
         if (!result.Success)
         {
@@ -84,5 +68,117 @@ public class DashboardDataController : ControllerBase
         }
 
         return Ok(result.Data);
+    }
+
+    // =========================================================
+    // Calls dashboard supporting records
+    // =========================================================
+
+    [HttpGet("calls-dashboard/items")]
+    public async Task<ActionResult<PortalDashboardCallsItemsResponse>>
+        GetCallsDashboardItems(
+            [FromQuery] PortalDashboardCallsItemsQuery query,
+            CancellationToken ct)
+    {
+        var accessResult =
+            await CheckDashboardAccess(
+                query.CustomerNo,
+                query.SiteId,
+                ct);
+
+        if (accessResult is not null)
+        {
+            return accessResult;
+        }
+
+        query.CustomerNo =
+            query.CustomerNo?
+                .Trim()
+                .ToUpperInvariant()
+            ?? "";
+
+        query.SiteId =
+            query.SiteId?
+                .Trim()
+                .ToUpperInvariant()
+            ?? "";
+
+        var result =
+            await _dashboardService
+                .GetCallsDashboardItemsAsync(
+                    query,
+                    ct);
+
+        if (!result.Success)
+        {
+            return StatusCode(
+                result.StatusCode,
+                result.Error);
+        }
+
+        return Ok(result.Data);
+    }
+
+    // =========================================================
+    // Shared access check
+    // =========================================================
+
+    private async Task<ActionResult?> CheckDashboardAccess(
+        string? customerNo,
+        string? siteId,
+        CancellationToken ct)
+    {
+        var cleanCustomerNo =
+            customerNo?
+                .Trim()
+                .ToUpperInvariant()
+            ?? "";
+
+        var cleanSiteId =
+            siteId?
+                .Trim()
+                .ToUpperInvariant()
+            ?? "";
+
+        if (string.IsNullOrWhiteSpace(cleanCustomerNo) &&
+            string.IsNullOrWhiteSpace(cleanSiteId))
+        {
+            return BadRequest(
+                "Either Customer No or Site ID is required.");
+        }
+
+        if (_accessService.HasUnrestrictedAccess(User))
+        {
+            return null;
+        }
+
+        if (!string.IsNullOrWhiteSpace(cleanSiteId))
+        {
+            var canAccessSite =
+                await _accessService.CanAccessSite(
+                    User,
+                    cleanSiteId,
+                    ct);
+
+            if (!canAccessSite)
+            {
+                return Forbid();
+            }
+
+            return null;
+        }
+
+        var canAccessCustomer =
+            await _accessService.CanAccessCustomer(
+                User,
+                cleanCustomerNo,
+                ct);
+
+        if (!canAccessCustomer)
+        {
+            return Forbid();
+        }
+
+        return null;
     }
 }
