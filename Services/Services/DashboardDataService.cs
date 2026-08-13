@@ -9,15 +9,18 @@ namespace mysystem_bff.Services.Services;
 public class DashboardDataService : IDashboardDataService
 {
     private readonly IMiddlewareCallsService _callsService;
+    private readonly IMiddlewareReferenceService _referenceService;
 
     public DashboardDataService(
-        IMiddlewareCallsService callsService)
+        IMiddlewareCallsService callsService,
+        IMiddlewareReferenceService referenceService)
     {
         _callsService = callsService;
+        _referenceService = referenceService;
     }
 
     // =========================================================
-    // Calls Dashboard
+    // Calls dashboard
     // =========================================================
 
     public async Task<ServiceResult<PortalCallsDashboardDataDto>>
@@ -31,7 +34,6 @@ public class DashboardDataService : IDashboardDataService
         var siteId =
             query.SiteId?.Trim().ToUpperInvariant() ?? "";
 
-        // At least one scope is required.
         if (string.IsNullOrWhiteSpace(customerNo) &&
             string.IsNullOrWhiteSpace(siteId))
         {
@@ -40,24 +42,34 @@ public class DashboardDataService : IDashboardDataService
                 400);
         }
 
-        // Validate dashboard year.
-        if (query.DataYear < 2000 ||
-            query.DataYear > DateTime.UtcNow.Year + 1)
+        // -----------------------------------------------------
+        // Parse year
+        // -----------------------------------------------------
+
+        var dataYear = query.DataYear;
+
+        if (dataYear < 2000 ||
+            dataYear > DateTime.UtcNow.Year + 1)
         {
             return ServiceResult<PortalCallsDashboardDataDto>.Fail(
                 "A valid data year is required.",
                 400);
         }
 
-        // Convert dashboard month/year selection into
-        // the date range expected by the Calls service.
+        // -----------------------------------------------------
+        // Resolve requested dashboard period
+        // -----------------------------------------------------
+
         var (loggedFrom, loggedTo) =
             GetDateRange(
                 query.DataMonth,
-                query.DataYear);
+                dataYear);
 
-        // Retrieve every call for the requested period.
-        var allCallsResult =
+        // -----------------------------------------------------
+        // Retrieve every call for the selected period
+        // -----------------------------------------------------
+
+        var callsResult =
             await GetAllCalls(
                 customerNo,
                 siteId,
@@ -65,20 +77,20 @@ public class DashboardDataService : IDashboardDataService
                 loggedTo,
                 ct);
 
-        if (!allCallsResult.Success)
+        if (!callsResult.Success)
         {
             return ServiceResult<PortalCallsDashboardDataDto>.Fail(
-                allCallsResult.Error ??
+                callsResult.Error ??
                     "Unable to retrieve calls for dashboard.",
-                allCallsResult.StatusCode);
+                callsResult.StatusCode);
         }
 
         var calls =
-            allCallsResult.Data ?? [];
+            callsResult.Data ?? [];
 
-        // =====================================================
-        // Remove cancelled calls
-        // =====================================================
+        // -----------------------------------------------------
+        // Cancelled calls are not used in dashboard statistics
+        // -----------------------------------------------------
 
         var activeCalls = calls
             .Where(call =>
@@ -89,7 +101,7 @@ public class DashboardDataService : IDashboardDataService
             .ToList();
 
         // =====================================================
-        // KPI data
+        // KPI values
         // =====================================================
 
         var openCalls =
@@ -111,7 +123,7 @@ public class DashboardDataService : IDashboardDataService
                     StringComparison.OrdinalIgnoreCase));
 
         // =====================================================
-        // Call status donut data
+        // Call-status donut
         // =====================================================
 
         var statusBreakdown = activeCalls
@@ -136,59 +148,70 @@ public class DashboardDataService : IDashboardDataService
             .ToList();
 
         // =====================================================
-        // Call type donut data
+        // Call-type donut
+        //
+        // Only three high-level categories are shown:
+        // PPM, Projects and Reactive.
         // =====================================================
 
-        var callTypeBreakdown = activeCalls
-            .Where(call =>
-                !string.IsNullOrWhiteSpace(
-                    call.CallType))
-            .GroupBy(call =>
-                call.CallType!
-                    .Trim()
-                    .ToUpperInvariant())
-            .Select(group =>
-                new DashboardBreakdownItemDto
+        var ppmCount =
+            activeCalls.Count(call =>
+                IsPpmCallType(
+                    call.CallType));
+
+        var projectCount =
+            activeCalls.Count(call =>
+                IsProjectCallType(
+                    call.CallType));
+
+        var reactiveCount =
+            activeCalls.Count(call =>
+                IsReactiveCallType(
+                    call.CallType));
+
+        var callTypeBreakdown =
+            new List<DashboardBreakdownItemDto>
+            {
+                new()
                 {
-                    Code = group.Key,
+                    Code = "PPM",
+                    Label = "PPM",
+                    Count = ppmCount
+                },
 
-                    // For now use the raw code.
-                    // We can resolve this through reference
-                    // data later if required.
-                    Label = group.Key,
+                new()
+                {
+                    Code = "PROJECTS",
+                    Label = "Projects",
+                    Count = projectCount
+                },
 
-                    Count = group.Count()
-                })
-            .OrderByDescending(item =>
-                item.Count)
+                new()
+                {
+                    Code = "REACTIVE",
+                    Label = "Reactive",
+                    Count = reactiveCount
+                }
+            }
+            .Where(item => item.Count > 0)
             .ToList();
 
         // =====================================================
-        // System type donut data
+        // System-type donut
         // =====================================================
 
-        var systemTypeBreakdown = activeCalls
-            .Where(call =>
-                !string.IsNullOrWhiteSpace(
-                    call.SystemType))
-            .GroupBy(call =>
-                call.SystemType!
-                    .Trim()
-                    .ToUpperInvariant())
-            .Select(group =>
-                new DashboardBreakdownItemDto
-                {
-                    Code = group.Key,
+        var systemTypeBreakdown =
+            await BuildSystemTypeBreakdown(
+                activeCalls,
+                ct);
 
-                    // Raw system code for now.
-                    // e.g. A1, F1AA etc.
-                    Label = group.Key,
-
-                    Count = group.Count()
-                })
-            .OrderByDescending(item =>
-                item.Count)
-            .ToList();
+        if (!systemTypeBreakdown.Success)
+        {
+            return ServiceResult<PortalCallsDashboardDataDto>.Fail(
+                systemTypeBreakdown.Error ??
+                    "Unable to build system type dashboard data.",
+                systemTypeBreakdown.StatusCode);
+        }
 
         // =====================================================
         // Build response
@@ -211,7 +234,7 @@ public class DashboardDataService : IDashboardDataService
                     callTypeBreakdown,
 
                 SystemTypeBreakdown =
-                    systemTypeBreakdown
+                    systemTypeBreakdown.Data ?? []
             };
 
         return ServiceResult<
@@ -220,7 +243,7 @@ public class DashboardDataService : IDashboardDataService
     }
 
     // =========================================================
-    // Retrieve every Calls page
+    // Retrieve every page of calls
     // =========================================================
 
     private async Task<
@@ -238,15 +261,13 @@ public class DashboardDataService : IDashboardDataService
         var page = 1;
         var hasMore = true;
 
-        // Prevent an accidental endless loop if MMAPI
-        // ever returns broken paging information.
         const int maximumPages = 500;
 
         while (
             hasMore &&
             page <= maximumPages)
         {
-            var callQuery =
+            var callsQuery =
                 new PortalCallsQuery
                 {
                     CustomerNo = customerNo,
@@ -261,7 +282,7 @@ public class DashboardDataService : IDashboardDataService
 
             var result =
                 await _callsService.GetCalls(
-                    callQuery,
+                    callsQuery,
                     ct);
 
             if (!result.Success)
@@ -307,7 +328,350 @@ public class DashboardDataService : IDashboardDataService
     }
 
     // =========================================================
-    // Dashboard date range
+    // Build broad system-type categories
+    // =========================================================
+
+    private async Task<
+    ServiceResult<List<DashboardBreakdownItemDto>>>
+    BuildSystemTypeBreakdown(
+        List<PortalCallDto> calls,
+        CancellationToken ct)
+    {
+        // Get only the unique system codes that actually appear
+        // in this dashboard dataset.
+        var systemCodes = calls
+            .Where(call =>
+                !string.IsNullOrWhiteSpace(
+                    call.SystemType))
+            .Select(call =>
+                call.SystemType!
+                    .Trim()
+                    .ToUpperInvariant())
+            .Distinct()
+            .ToList();
+
+        var categoryCounts =
+            new Dictionary<string, int>(
+                StringComparer.OrdinalIgnoreCase);
+
+        foreach (var systemCode in systemCodes)
+        {
+            // Resolve the raw system code through our existing
+            // reference service.
+            var referenceQuery =
+                new PortalReferenceQuery
+                {
+                    Code = systemCode,
+                    Page = 1,
+                    PageSize = 1
+                };
+
+            var referenceResult =
+                await _referenceService.GetSystemTypes(
+                    referenceQuery,
+                    ct);
+
+            if (!referenceResult.Success)
+            {
+                return ServiceResult<
+                    List<DashboardBreakdownItemDto>>
+                    .Fail(
+                        referenceResult.Error ??
+                            $"Unable to resolve system type '{systemCode}'.",
+                        referenceResult.StatusCode);
+            }
+
+            // If the reference table unexpectedly contains no record,
+            // fall back to the raw code.
+            var description =
+                referenceResult.Data?
+                    .Items
+                    .FirstOrDefault()?
+                    .Description
+                    ?.Trim()
+                ?? systemCode;
+
+            // Convert the detailed system description into one of our
+            // broad dashboard categories.
+            var category =
+                GetSystemCategory(description);
+
+            // Count every call which uses this exact system code.
+            var count = calls.Count(call =>
+                string.Equals(
+                    call.SystemType?.Trim(),
+                    systemCode,
+                    StringComparison.OrdinalIgnoreCase));
+
+            if (!categoryCounts.ContainsKey(category))
+            {
+                categoryCounts[category] = 0;
+            }
+
+            categoryCounts[category] += count;
+        }
+
+        var result = categoryCounts
+            .Select(item =>
+                new DashboardBreakdownItemDto
+                {
+                    Code =
+                        GetSystemCategoryCode(
+                            item.Key),
+
+                    Label = item.Key,
+
+                    Count = item.Value
+                })
+            .OrderByDescending(item =>
+                item.Count)
+            .ToList();
+
+        return ServiceResult<
+            List<DashboardBreakdownItemDto>>
+            .Ok(result);
+    }
+
+    // =========================================================
+    // Broad system categories
+    // =========================================================
+
+    private static string GetSystemCategory(
+        string description)
+    {
+        var cleanDescription =
+            description
+                .Trim()
+                .ToUpperInvariant();
+
+        if (cleanDescription.Contains("CCTV"))
+        {
+            return "CCTV";
+        }
+
+        if (cleanDescription.Contains("FIRE ALARM"))
+        {
+            return "Fire Alarm";
+        }
+
+        if (cleanDescription.Contains("EXTINGUISH"))
+        {
+            return "Extinguishers";
+        }
+
+        if (cleanDescription.Contains("INTRUDER"))
+        {
+            return "Intruder Alarm";
+        }
+
+        if (cleanDescription.Contains("IT") &&
+            cleanDescription.Contains("COMMUNICATION"))
+        {
+            return "IT and Communications";
+        }
+
+        if (cleanDescription.Contains("ACCESS CONTROL") ||
+            cleanDescription.Contains("DOOR ACCESS"))
+        {
+            return "Access Control";
+        }
+
+        if (cleanDescription.Contains("TELEPHON"))
+        {
+            return "Telephony System";
+        }
+
+        if (cleanDescription.Contains("DISABLED REFUGE") ||
+            cleanDescription.Contains("REFUGE"))
+        {
+            return "Disabled Refuge";
+        }
+
+        // Useful additional broad categories.
+
+        if (cleanDescription.Contains("PANIC") ||
+            cleanDescription.Contains("HOLD UP"))
+        {
+            return "Panic Alarm";
+        }
+
+        if (cleanDescription.Contains("INTERCOM"))
+        {
+            return "Intercom";
+        }
+
+        if (cleanDescription.Contains("PA SYSTEM") ||
+            cleanDescription.Contains("PUBLIC ADDRESS") ||
+            cleanDescription.Contains("SOUND SYSTEM"))
+        {
+            return "PA / Sound System";
+        }
+
+        if (cleanDescription.Contains("NURSE CALL"))
+        {
+            return "Nurse Call";
+        }
+
+        if (cleanDescription.Contains("GATE") ||
+            cleanDescription.Contains("BARRIER"))
+        {
+            return "Gates and Barriers";
+        }
+
+        return "Other";
+    }
+
+    private static string GetSystemCategoryCode(
+        string category)
+    {
+        return category switch
+        {
+            "CCTV" =>
+                "CCTV",
+
+            "Fire Alarm" =>
+                "FIRE",
+
+            "Extinguishers" =>
+                "EXT",
+
+            "Intruder Alarm" =>
+                "INTRUDER",
+
+            "IT and Communications" =>
+                "IT",
+
+            "Access Control" =>
+                "ACCESS",
+
+            "Telephony System" =>
+                "TELEPHONY",
+
+            "Disabled Refuge" =>
+                "REFUGE",
+
+            "Panic Alarm" =>
+                "PANIC",
+
+            "Intercom" =>
+                "INTERCOM",
+
+            "PA / Sound System" =>
+                "PA",
+
+            "Nurse Call" =>
+                "NURSE",
+
+            "Gates and Barriers" =>
+                "GATES",
+
+            _ =>
+                "OTHER"
+        };
+    }
+
+    // =========================================================
+    // Call-type categories
+    // =========================================================
+
+    private static bool IsPpmCallType(
+    string? callType)
+    {
+        var cleanType =
+            callType?
+                .Trim()
+                .ToUpperInvariant()
+            ?? "";
+
+        return cleanType is
+            ">" or
+            "P";
+    }
+
+    private static bool IsProjectCallType(
+        string? callType)
+    {
+        var cleanType =
+            callType?
+                .Trim()
+                .ToUpperInvariant()
+            ?? "";
+
+        return cleanType is
+            "=" or
+            "L" or
+            "I" or
+            "A" or
+            "D" or
+            "@" or
+            "*" or
+            "Š" or
+            "‰" or
+            "®";
+    }
+
+    private static bool IsReactiveCallType(
+        string? callType)
+    {
+        return
+            !IsPpmCallType(callType) &&
+            !IsProjectCallType(callType);
+    }
+
+    // =========================================================
+    // Call-status helpers
+    // =========================================================
+
+    private static bool IsOpenStatus(
+        string? status)
+    {
+        var cleanStatus =
+            status?
+                .Trim()
+                .ToUpperInvariant()
+            ?? "";
+
+        return cleanStatus is
+            "N" or
+            "A" or
+            "E" or
+            "F" or
+            "R";
+    }
+
+    private static string GetCallStatusLabel(
+        string status)
+    {
+        return status
+            .Trim()
+            .ToUpperInvariant()
+            switch
+        {
+            "A" =>
+                "Assigned to Engineer",
+
+            "C" =>
+                "Completed",
+
+            "E" =>
+                "Engineer Completed",
+
+            "F" =>
+                "Further Action Required",
+
+            "N" =>
+                "New",
+
+            "R" =>
+                "Response in Progress",
+
+            _ =>
+                "Unknown"
+        };
+    }
+
+    // =========================================================
+    // Date range
     // =========================================================
 
     private static (
@@ -317,7 +681,6 @@ public class DashboardDataService : IDashboardDataService
             MonthType month,
             int year)
     {
-        // Whole year.
         if (month == MonthType.ALL)
         {
             var startOfYear =
@@ -363,61 +726,5 @@ public class DashboardDataService : IDashboardDataService
             startOfMonth,
             startOfMonth.AddMonths(1)
         );
-    }
-
-    // =========================================================
-    // Open-call status definition
-    // =========================================================
-
-    private static bool IsOpenStatus(
-        string? status)
-    {
-        var cleanStatus =
-            status?
-                .Trim()
-                .ToUpperInvariant()
-            ?? "";
-
-        return cleanStatus is
-            "N" or // New
-            "A" or // Assigned to Engineer
-            "E" or // Engineer completed, not invoiced
-            "F" or // Further action required
-            "R";   // Response in progress
-    }
-
-    // =========================================================
-    // Call-status descriptions
-    // =========================================================
-
-    private static string GetCallStatusLabel(
-        string status)
-    {
-        return status
-            .Trim()
-            .ToUpperInvariant()
-            switch
-        {
-            "A" =>
-                "Assigned to Engineer",
-
-            "C" =>
-                "Completed",
-
-            "E" =>
-                "Engineer Completed",
-
-            "F" =>
-                "Further Action Required",
-
-            "N" =>
-                "New",
-
-            "R" =>
-                "Response in Progress",
-
-            _ =>
-                "Unknown"
-        };
     }
 }
