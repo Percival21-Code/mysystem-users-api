@@ -5,6 +5,10 @@ namespace mysystem_bff.Services.Interfaces;
 
 public interface IDashboardDataService
 {
+    // =========================================================
+    // Calls dashboard
+    // =========================================================
+
     Task<ServiceResult<PortalCallsDashboardDataDto>>
         GetCallsDashboardDataAsync(
             PortalDashboardDataQuery query,
@@ -13,5 +17,19 @@ public interface IDashboardDataService
     Task<ServiceResult<PortalDashboardCallsItemsResponse>>
         GetCallsDashboardItemsAsync(
             PortalDashboardCallsItemsQuery query,
+            CancellationToken ct = default);
+
+    // =========================================================
+    // Maintenance dashboard
+    // =========================================================
+
+    Task<ServiceResult<PortalMaintenanceDashboardDataDto>>
+        GetMaintenanceDashboardDataAsync(
+            PortalDashboardDataQuery query,
+            CancellationToken ct = default);
+
+    Task<ServiceResult<PortalDashboardMaintenanceItemsResponse>>
+        GetMaintenanceDashboardItemsAsync(
+            PortalDashboardMaintenanceItemsQuery query,
             CancellationToken ct = default);
 }

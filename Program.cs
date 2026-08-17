@@ -106,7 +106,17 @@ builder.Services.AddHttpClient<IMiddlewareCallActionsService, MiddlewareCallActi
 
 // frontend dashboard services
 
-builder.Services.AddScoped<IDashboardDataService, DashboardDataService>();
+builder.Services.AddScoped<
+    ICallsDashboardService,
+    CallsDashboardService>();
+
+builder.Services.AddScoped<
+    IMaintenanceDashboardService,
+    MaintenanceDashboardService>();
+
+builder.Services.AddScoped<
+    IDashboardDataService,
+    DashboardDataService>();
 
 // mmapi authentication service
 

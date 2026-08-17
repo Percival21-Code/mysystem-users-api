@@ -120,6 +120,108 @@ public class DashboardDataController : ControllerBase
     }
 
     // =========================================================
+    // Maintenance dashboard summary
+    // =========================================================
+
+    [HttpGet("maintenance-dashboard")]
+    public async Task<ActionResult<PortalMaintenanceDashboardDataDto>>
+        GetMaintenanceDashboardData(
+            [FromQuery] PortalDashboardDataQuery query,
+            CancellationToken ct)
+    {
+        // access rights
+        var accessResult =
+            await CheckDashboardAccess(
+                query.CustomerNo,
+                query.SiteId,
+                ct);
+
+        if (accessResult is not null)
+        {
+            return accessResult;
+        }
+
+        // get data
+        query.CustomerNo =
+            query.CustomerNo?
+                .Trim()
+                .ToUpperInvariant()
+            ?? "";
+
+        query.SiteId =
+            query.SiteId?
+                .Trim()
+                .ToUpperInvariant()
+            ?? "";
+
+        var result =
+            await _dashboardService
+                .GetMaintenanceDashboardDataAsync(
+                    query,
+                    ct);
+
+        // response to frontend
+        if (!result.Success)
+        {
+            return StatusCode(
+                result.StatusCode,
+                result.Error);
+        }
+
+        return Ok(result.Data);
+    }
+
+    // =========================================================
+    // Maintenance dashboard supporting records
+    // =========================================================
+
+    [HttpGet("maintenance-dashboard/items")]
+    public async Task<ActionResult<PortalDashboardMaintenanceItemsResponse>>
+    GetMaintenanceDashboardItems(
+        [FromQuery] PortalDashboardMaintenanceItemsQuery query,
+        CancellationToken ct)
+    {
+        var accessResult =
+            await CheckDashboardAccess(
+                query.CustomerNo,
+                query.SiteId,
+                ct);
+
+        if (accessResult is not null)
+        {
+            return accessResult;
+        }
+
+        query.CustomerNo =
+            query.CustomerNo?
+                .Trim()
+                .ToUpperInvariant()
+            ?? "";
+
+        query.SiteId =
+            query.SiteId?
+                .Trim()
+                .ToUpperInvariant()
+            ?? "";
+
+        var result =
+            await _dashboardService
+                .GetMaintenanceDashboardItemsAsync(
+                    query,
+                    ct);
+
+        if (!result.Success)
+        {
+            return StatusCode(
+                result.StatusCode,
+                result.Error);
+        }
+
+        return Ok(
+            result.Data);
+    }
+
+    // =========================================================
     // Shared access check
     // =========================================================
 
