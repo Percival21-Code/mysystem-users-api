@@ -6,9 +6,15 @@ public class PortalMaintenanceDashboardItemDto
 
     public int SystemNo { get; set; }
 
-    public DateTime NextMaintenanceDate { get; set; }
+    public string SystemCode { get; set; } = "";
 
-    public string Description { get; set; } = "";
+    public string SystemType { get; set; } = "";
+
+    public string MaintainedYN { get; set; } = "";
+
+    public DateTime? LastMaintenanceDate { get; set; }
+
+    public DateTime? NextMaintenanceDate { get; set; }
 
     public string StatusCode { get; set; } = "";
 

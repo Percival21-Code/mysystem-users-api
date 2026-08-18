@@ -1,7 +1,6 @@
 using mysystem_bff.Models.Admin;
 using mysystem_bff.Models.Portal;
 using mysystem_bff.Models.Portal.DashboardData;
-using mysystem_bff.Services.Dashboard;
 using mysystem_bff.Services.Interfaces;
 
 namespace mysystem_bff.Services.Services;
@@ -10,14 +9,20 @@ public class MaintenanceDashboardService
     : IMaintenanceDashboardService
 {
     private readonly IMiddlewareSitesService _sitesService;
+    private readonly IMiddlewareSiteSystemsService _siteSystemsService;
     private readonly IMiddlewareSmsService _smsService;
+    private readonly IMiddlewareReferenceService _referenceService;
 
     public MaintenanceDashboardService(
         IMiddlewareSitesService sitesService,
-        IMiddlewareSmsService smsService)
+        IMiddlewareSiteSystemsService siteSystemsService,
+        IMiddlewareSmsService smsService,
+        IMiddlewareReferenceService referenceService)
     {
         _sitesService = sitesService;
+        _siteSystemsService = siteSystemsService;
         _smsService = smsService;
+        _referenceService = referenceService;
     }
 
     // =========================================================
@@ -30,10 +35,12 @@ public class MaintenanceDashboardService
             CancellationToken ct = default)
     {
         var customerNo =
-            query.CustomerNo?.Trim().ToUpperInvariant() ?? "";
+            CleanCode(
+                query.CustomerNo);
 
         var siteId =
-            query.SiteId?.Trim().ToUpperInvariant() ?? "";
+            CleanCode(
+                query.SiteId);
 
         if (string.IsNullOrWhiteSpace(customerNo) &&
             string.IsNullOrWhiteSpace(siteId))
@@ -43,46 +50,33 @@ public class MaintenanceDashboardService
                 400);
         }
 
-        if (!DashboardDateHelper.IsValidYear(
-            query.DataYear))
-        {
-            return ServiceResult<PortalMaintenanceDashboardDataDto>.Fail(
-                "A valid data year is required.",
-                400);
-        }
-
         /*
-         * Unlike Calls Dashboard, this range applies to
-         * NextMaintenanceDate rather than LoggedDate.
+         * Maintenance status is a current-estate measurement.
+         *
+         * Do NOT constrain the source dataset by DataMonth/DataYear.
+         * An overdue system may have a next-maintenance date in a
+         * previous year, while an up-to-date system may fall in a
+         * future year.
          */
-        var (maintenanceFrom, maintenanceTo) =
-            DashboardDateHelper.GetDateRange(
-                query.DataMonth,
-                query.DataYear);
-
-        var schedulesResult =
-            await GetMaintenanceSchedulesForDashboard(
+        var itemsResult =
+            await GetMaintenanceDashboardDataset(
                 customerNo,
                 siteId,
-                maintenanceFrom,
-                maintenanceTo,
                 ct);
 
-        if (!schedulesResult.Success)
+        if (!itemsResult.Success)
         {
             return ServiceResult<PortalMaintenanceDashboardDataDto>.Fail(
-                schedulesResult.Error ??
-                    "Unable to retrieve maintenance schedules for dashboard.",
-                schedulesResult.StatusCode);
+                itemsResult.Error ??
+                    "Unable to retrieve maintenance dashboard data.",
+                itemsResult.StatusCode);
         }
+
+        var items =
+            itemsResult.Data ?? [];
 
         var today =
             DateTime.UtcNow.Date;
-
-        var items =
-            BuildMaintenanceDashboardItems(
-                schedulesResult.Data ?? [],
-                today);
 
         // =====================================================
         // KPI DATA
@@ -192,12 +186,20 @@ public class MaintenanceDashboardService
         var result =
             new PortalMaintenanceDashboardDataDto
             {
-                CustomerNo = customerNo,
-                SiteId = siteId,
+                CustomerNo =
+                    customerNo,
 
-                UpToDate = upToDate,
-                DueSoon = dueSoon,
-                Overdue = overdue,
+                SiteId =
+                    siteId,
+
+                UpToDate =
+                    upToDate,
+
+                DueSoon =
+                    dueSoon,
+
+                Overdue =
+                    overdue,
 
                 MaintenanceStatusBreakdown =
                     maintenanceStatusBreakdown,
@@ -220,10 +222,12 @@ public class MaintenanceDashboardService
             CancellationToken ct = default)
     {
         var customerNo =
-            query.CustomerNo?.Trim().ToUpperInvariant() ?? "";
+            CleanCode(
+                query.CustomerNo);
 
         var siteId =
-            query.SiteId?.Trim().ToUpperInvariant() ?? "";
+            CleanCode(
+                query.SiteId);
 
         if (string.IsNullOrWhiteSpace(customerNo) &&
             string.IsNullOrWhiteSpace(siteId))
@@ -233,54 +237,41 @@ public class MaintenanceDashboardService
                 400);
         }
 
-        if (!DashboardDateHelper.IsValidYear(
-            query.DataYear))
-        {
-            return ServiceResult<PortalDashboardMaintenanceItemsResponse>.Fail(
-                "A valid data year is required.",
-                400);
-        }
-
         var page =
             query.Page > 0
                 ? query.Page
                 : 1;
 
-        // Hard dashboard limit.
         var pageSize =
             Math.Clamp(
                 query.PageSize,
                 1,
                 30);
 
-        var (maintenanceFrom, maintenanceTo) =
-            DashboardDateHelper.GetDateRange(
-                query.DataMonth,
-                query.DataYear);
-
-        var schedulesResult =
-            await GetMaintenanceSchedulesForDashboard(
+        /*
+         * DataMonth and DataYear intentionally do not constrain the
+         * maintenance dataset. They remain on the query model for now
+         * so the current frontend/API contract does not break.
+         */
+        var itemsResult =
+            await GetMaintenanceDashboardDataset(
                 customerNo,
                 siteId,
-                maintenanceFrom,
-                maintenanceTo,
                 ct);
 
-        if (!schedulesResult.Success)
+        if (!itemsResult.Success)
         {
             return ServiceResult<PortalDashboardMaintenanceItemsResponse>.Fail(
-                schedulesResult.Error ??
-                    "Unable to retrieve maintenance schedules for dashboard.",
-                schedulesResult.StatusCode);
+                itemsResult.Error ??
+                    "Unable to retrieve maintenance dashboard data.",
+                itemsResult.StatusCode);
         }
 
         var today =
             DateTime.UtcNow.Date;
 
         var filteredItems =
-            BuildMaintenanceDashboardItems(
-                    schedulesResult.Data ?? [],
-                    today)
+            (itemsResult.Data ?? [])
                 .Where(item =>
                     MatchesMaintenanceFilter(
                         item,
@@ -303,17 +294,24 @@ public class MaintenanceDashboardService
                 .Skip(
                     (page - 1) *
                     pageSize)
-                .Take(pageSize)
+                .Take(
+                    pageSize)
                 .ToList();
 
         var result =
             new PortalDashboardMaintenanceItemsResponse
             {
-                Items = items,
+                Items =
+                    items,
 
-                Page = page,
-                PageSize = pageSize,
-                Total = total,
+                Page =
+                    page,
+
+                PageSize =
+                    pageSize,
+
+                Total =
+                    total,
 
                 HasMore =
                     page * pageSize < total
@@ -324,17 +322,19 @@ public class MaintenanceDashboardService
     }
 
     // =========================================================
-    // RETRIEVE MAINTENANCE SCHEDULES
+    // BUILD COMPLETE MAINTENANCE DATASET
     // =========================================================
 
-    private async Task<ServiceResult<List<PortalSMSDto>>>
-        GetMaintenanceSchedulesForDashboard(
+    private async Task<ServiceResult<List<PortalMaintenanceDashboardItemDto>>>
+        GetMaintenanceDashboardDataset(
             string customerNo,
             string siteId,
-            DateTime maintenanceFrom,
-            DateTime maintenanceTo,
             CancellationToken ct)
     {
+        // =====================================================
+        // Resolve dashboard site scope
+        // =====================================================
+
         var siteIdsResult =
             await GetMaintenanceDashboardSiteIds(
                 customerNo,
@@ -343,7 +343,7 @@ public class MaintenanceDashboardService
 
         if (!siteIdsResult.Success)
         {
-            return ServiceResult<List<PortalSMSDto>>.Fail(
+            return ServiceResult<List<PortalMaintenanceDashboardItemDto>>.Fail(
                 siteIdsResult.Error ??
                     "Unable to retrieve sites for maintenance dashboard.",
                 siteIdsResult.StatusCode);
@@ -354,21 +354,59 @@ public class MaintenanceDashboardService
 
         if (siteIds.Count == 0)
         {
-            return ServiceResult<List<PortalSMSDto>>.Ok([]);
+            return ServiceResult<List<PortalMaintenanceDashboardItemDto>>.Ok(
+                []);
+        }
+
+        // =====================================================
+        // Retrieve maintained systems
+        // =====================================================
+
+        var systemsResult =
+            await _siteSystemsService
+                .GetSiteSystemsForSitesAsync(
+                    siteIds,
+                    "Y",
+                    ct);
+
+        if (!systemsResult.Success)
+        {
+            return ServiceResult<List<PortalMaintenanceDashboardItemDto>>.Fail(
+                systemsResult.Error ??
+                    "Unable to retrieve maintained site systems.",
+                systemsResult.StatusCode);
         }
 
         /*
+         * maintained filter is present on both backend 
+         * and mmapi 
+         */
+        var maintainedSystems =
+            (systemsResult.Data ?? [])
+                .Where(system =>
+                    string.Equals(
+                        CleanCode(system.Maintained_YN),
+                        "Y",
+                        StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+        if (maintainedSystems.Count == 0)
+        {
+            return ServiceResult<List<PortalMaintenanceDashboardItemDto>>.Ok(
+                []);
+        }
+
+        // =====================================================
+        // Retrieve reliable next-maintenance schedules
+        // =====================================================
+
+        /*
          * Customer-wide:
-         *
-         * We already know CustomerNo is valid for the portal user,
-         * so pass it through. MMAPI then avoids resolving CustomerNo
-         * from each individual Site ID.
+         * pass the already-authorised CustomerNo so mmapi does not need
+         * to resolve the owning customer independently for every site.
          *
          * Specific-site:
-         *
-         * Leave CustomerNo blank. MMAPI resolves the site's actual
-         * owning customer from SiteId rather than trusting a CustomerNo
-         * that may have been separately supplied in the request.
+         * leave it blank so mmapi resolves the site's real customer.
          */
         var middlewareCustomerNo =
             string.IsNullOrWhiteSpace(siteId)
@@ -376,46 +414,142 @@ public class MaintenanceDashboardService
                 : "";
 
         var schedulesResult =
-            await _smsService.GetMaintenanceSchedulesForSites(
-                middlewareCustomerNo,
-                siteIds,
-                maintenanceFrom,
-                maintenanceTo,
-                ct);
+            await _smsService
+                .GetMaintenanceSchedulesForSites(
+                    middlewareCustomerNo,
+                    siteIds,
+                    nextMaintenanceFrom: null,
+                    nextMaintenanceTo: null,
+                    ct);
 
         if (!schedulesResult.Success)
         {
-            return ServiceResult<List<PortalSMSDto>>.Fail(
+            return ServiceResult<List<PortalMaintenanceDashboardItemDto>>.Fail(
                 schedulesResult.Error ??
-                    "Unable to retrieve maintenance schedules from middleware.",
+                    "Unable to retrieve maintenance schedules.",
                 schedulesResult.StatusCode);
         }
 
-        /*
-         * MMAPI receives the same date filters, but reapply them here.
-         *
-         * The BFF owns the portal dashboard contract, so the dashboard
-         * should remain correct even if MMAPI's filtering changes later.
-         */
-        var filteredSchedules =
+        // =====================================================
+        // Retrieve system type references
+        // =====================================================
+
+        var systemTypeMapResult =
+            await GetSystemTypeMap(
+                ct);
+
+        if (!systemTypeMapResult.Success)
+        {
+            return ServiceResult<List<PortalMaintenanceDashboardItemDto>>.Fail(
+                systemTypeMapResult.Error ??
+                    "Unable to retrieve system type references.",
+                systemTypeMapResult.StatusCode);
+        }
+
+        var systemTypeMap =
+            systemTypeMapResult.Data ??
+            new Dictionary<string, string>(
+                StringComparer.OrdinalIgnoreCase);
+
+        // =====================================================
+        // Build schedule lookup
+        // =====================================================
+
+        var scheduleMap =
             (schedulesResult.Data ?? [])
-                .Where(schedule =>
+                .GroupBy(
+                    schedule =>
+                        BuildSystemKey(
+                            schedule.SiteId,
+                            schedule.SystemNo),
+                    StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(
+                    group =>
+                        group.Key,
+                    group =>
+                        group.First(),
+                    StringComparer.OrdinalIgnoreCase);
+
+        // =====================================================
+        // Join systems + schedules + references
+        // =====================================================
+
+        var today =
+            DateTime.UtcNow.Date;
+
+        var items =
+            new List<PortalMaintenanceDashboardItemDto>();
+
+        foreach (var system in maintainedSystems)
+        {
+            var systemCode =
+                CleanCode(
+                    system.SystemCode);
+
+            var key =
+                BuildSystemKey(
+                    system.SiteId,
+                    system.SystemNo);
+
+            scheduleMap.TryGetValue(
+                key,
+                out var schedule);
+
+            var lastMaintenanceDate =
+                ParseNullableDate(
+                    system.LastMaintenanceDate);
+
+            var nextMaintenanceDate =
+                ParseNullableDate(
+                    schedule?.NextMaintenanceDate);
+
+            var statusCode =
+                GetMaintenanceStatusCode(
+                    nextMaintenanceDate,
+                    today);
+
+            var systemType =
+                ResolveSystemType(
+                    systemCode,
+                    systemTypeMap);
+
+            items.Add(
+                new PortalMaintenanceDashboardItemDto
                 {
-                    if (!TryGetMaintenanceDate(
-                        schedule.NextMaintenanceDate,
-                        out var maintenanceDate))
-                    {
-                        return false;
-                    }
+                    SiteId =
+                        CleanCode(
+                            system.SiteId),
 
-                    return
-                        maintenanceDate.Date >= maintenanceFrom.Date &&
-                        maintenanceDate.Date <= maintenanceTo.Date;
-                })
-                .ToList();
+                    SystemNo =
+                        system.SystemNo,
 
-        return ServiceResult<List<PortalSMSDto>>.Ok(
-            filteredSchedules);
+                    SystemCode =
+                        systemCode,
+
+                    SystemType =
+                        systemType,
+
+                    MaintainedYN =
+                        CleanCode(
+                            system.Maintained_YN),
+
+                    LastMaintenanceDate =
+                        lastMaintenanceDate,
+
+                    NextMaintenanceDate =
+                        nextMaintenanceDate,
+
+                    StatusCode =
+                        statusCode,
+
+                    StatusLabel =
+                        GetMaintenanceStatusLabel(
+                            statusCode)
+                });
+        }
+
+        return ServiceResult<List<PortalMaintenanceDashboardItemDto>>.Ok(
+            items);
     }
 
     // =========================================================
@@ -429,8 +563,8 @@ public class MaintenanceDashboardService
             CancellationToken ct)
     {
         /*
-         * Specific-site dashboard does not need to retrieve the
-         * customer's entire site collection.
+         * A specific-site dashboard does not need the customer's complete
+         * site collection.
          */
         if (!string.IsNullOrWhiteSpace(siteId))
         {
@@ -461,9 +595,14 @@ public class MaintenanceDashboardService
                 await _sitesService.GetSites(
                     new PortalSitesQuery
                     {
-                        CustomerNo = customerNo,
-                        Page = page,
-                        PageSize = 100
+                        CustomerNo =
+                            customerNo,
+
+                        Page =
+                            page,
+
+                        PageSize =
+                            100
                     },
                     ct);
 
@@ -485,10 +624,8 @@ public class MaintenanceDashboardService
             siteIds.AddRange(
                 sitesResult.Data.Items
                     .Select(site =>
-                        site.SiteId?
-                            .Trim()
-                            .ToUpperInvariant()
-                        ?? "")
+                        CleanCode(
+                            site.SiteId))
                     .Where(value =>
                         !string.IsNullOrWhiteSpace(value)));
 
@@ -513,63 +650,109 @@ public class MaintenanceDashboardService
     }
 
     // =========================================================
-    // MAINTENANCE ITEM CREATION
+    // SYSTEM TYPE REFERENCES
     // =========================================================
 
-    private static List<PortalMaintenanceDashboardItemDto>
-        BuildMaintenanceDashboardItems(
-            IEnumerable<PortalSMSDto> schedules,
-            DateTime today)
+    private async Task<ServiceResult<Dictionary<string, string>>>
+        GetSystemTypeMap(
+            CancellationToken ct)
     {
-        var items =
-            new List<PortalMaintenanceDashboardItemDto>();
+        var result =
+            new Dictionary<string, string>(
+                StringComparer.OrdinalIgnoreCase);
 
-        foreach (var schedule in schedules)
+        var page = 1;
+        var hasMore = true;
+
+        const int maximumPages = 100;
+
+        while (
+            hasMore &&
+            page <= maximumPages)
         {
-            if (!TryGetMaintenanceDate(
-                schedule.NextMaintenanceDate,
-                out var nextMaintenanceDate))
+            var referenceResult =
+                await _referenceService.GetSystemTypes(
+                    new PortalReferenceQuery
+                    {
+                        Page =
+                            page,
+
+                        PageSize =
+                            100
+                    },
+                    ct);
+
+            if (!referenceResult.Success)
             {
-                /*
-                 * A schedule without a valid NextMaintenanceDate cannot
-                 * be meaningfully placed into this dashboard.
-                 */
-                continue;
+                return ServiceResult<Dictionary<string, string>>.Fail(
+                    referenceResult.Error ??
+                        "Unable to retrieve system type references.",
+                    referenceResult.StatusCode);
             }
 
-            var statusCode =
-                GetMaintenanceStatusCode(
-                    nextMaintenanceDate,
-                    today);
+            if (referenceResult.Data is null)
+            {
+                return ServiceResult<Dictionary<string, string>>.Fail(
+                    "System type reference response was empty.",
+                    502);
+            }
 
-            items.Add(
-                new PortalMaintenanceDashboardItemDto
+            foreach (var systemType in referenceResult.Data.Items)
+            {
+                var code =
+                    CleanCode(
+                        systemType.Code);
+
+                if (string.IsNullOrWhiteSpace(code))
                 {
-                    SiteId =
-                        schedule.SiteId?
-                            .Trim()
-                            .ToUpperInvariant()
-                        ?? "",
+                    continue;
+                }
 
-                    SystemNo =
-                        schedule.SystemNo,
+                result[code] =
+                    systemType.Description?
+                        .Trim()
+                    ?? "";
+            }
 
-                    NextMaintenanceDate =
-                        nextMaintenanceDate.Date,
+            hasMore =
+                referenceResult.Data.HasMore;
 
-                    Description =
-                        schedule.Description ?? "",
-
-                    StatusCode =
-                        statusCode,
-
-                    StatusLabel =
-                        GetMaintenanceStatusLabel(
-                            statusCode)
-                });
+            page++;
         }
 
-        return items;
+        if (hasMore)
+        {
+            return ServiceResult<Dictionary<string, string>>.Fail(
+                "System type reference retrieval exceeded the maximum page limit.",
+                502);
+        }
+
+        return ServiceResult<Dictionary<string, string>>.Ok(
+            result);
+    }
+
+    private static string ResolveSystemType(
+        string systemCode,
+        Dictionary<string, string> systemTypeMap)
+    {
+        if (string.IsNullOrWhiteSpace(systemCode))
+        {
+            return "Unknown";
+        }
+
+        if (systemTypeMap.TryGetValue(
+                systemCode,
+                out var description) &&
+            !string.IsNullOrWhiteSpace(description))
+        {
+            return description;
+        }
+
+        /*
+         * If reference data is missing for a particular code, keep the raw
+         * code visible rather than losing useful information.
+         */
+        return systemCode;
     }
 
     // =========================================================
@@ -577,11 +760,16 @@ public class MaintenanceDashboardService
     // =========================================================
 
     private static string GetMaintenanceStatusCode(
-        DateTime nextMaintenanceDate,
+        DateTime? nextMaintenanceDate,
         DateTime today)
     {
+        if (!nextMaintenanceDate.HasValue)
+        {
+            return "UNKNOWN";
+        }
+
         var maintenanceDate =
-            nextMaintenanceDate.Date;
+            nextMaintenanceDate.Value.Date;
 
         var todayDate =
             today.Date;
@@ -614,6 +802,9 @@ public class MaintenanceDashboardService
             "OVERDUE" =>
                 "Overdue",
 
+            "UNKNOWN" =>
+                "No maintenance date",
+
             _ =>
                 statusCode
         };
@@ -628,8 +819,13 @@ public class MaintenanceDashboardService
         DashboardMaintenanceFilterType filterType,
         DateTime today)
     {
+        if (!item.NextMaintenanceDate.HasValue)
+        {
+            return false;
+        }
+
         var maintenanceDate =
-            item.NextMaintenanceDate.Date;
+            item.NextMaintenanceDate.Value.Date;
 
         var todayDate =
             today.Date;
@@ -669,26 +865,42 @@ public class MaintenanceDashboardService
     }
 
     // =========================================================
-    // DATE PARSING
+    // GENERAL HELPERS
     // =========================================================
 
-    private static bool TryGetMaintenanceDate(
-        string? value,
-        out DateTime date)
+    private static DateTime? ParseNullableDate(
+        string? value)
     {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
         if (DateTime.TryParse(
             value,
             out var parsed))
         {
-            date =
-                parsed.Date;
-
-            return true;
+            return parsed.Date;
         }
 
-        date =
-            default;
+        return null;
+    }
 
-        return false;
+    private static string BuildSystemKey(
+        string? siteId,
+        int systemNo)
+    {
+        return
+            $"{CleanCode(siteId)}|" +
+            $"{systemNo}";
+    }
+
+    private static string CleanCode(
+        string? value)
+    {
+        return value?
+            .Trim()
+            .ToUpperInvariant()
+            ?? "";
     }
 }
