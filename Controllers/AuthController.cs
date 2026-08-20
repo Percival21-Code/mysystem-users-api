@@ -5,7 +5,10 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 using MySqlConnector;
+using mysystem_bff.Models.Admin;
 using mysystem_bff.Models.Auth;
+using mysystem_bff.Models.Portal;
+using mysystem_bff.Services.Interfaces;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -15,13 +18,19 @@ using System.Text;
 public class AuthController : ControllerBase
 {
     private readonly MySqlConnection _db;
+    private readonly IMiddlewareAuthService _authService;
     private readonly IConfiguration _configuration;
 
-    public AuthController(MySqlConnection db, IConfiguration configuration)
+    public AuthController(MySqlConnection db, IMiddlewareAuthService authService, IConfiguration configuration)
     {
         _db = db;
+        _authService = authService;
         _configuration = configuration;
     }
+
+    // =======================================================
+    // log in a user
+    // =======================================================
 
     [HttpPost("login")]
     [AllowAnonymous]
@@ -85,20 +94,62 @@ public class AuthController : ControllerBase
         });
     }
 
+    // =======================================================
+    // logged in user details
+    // =======================================================
+
     [HttpGet("me")]
     [Authorize]
-    public IActionResult Me()
+    public async Task<ActionResult<PortalUserDetails>> Me()
     {
-        return Ok(new
+        var user = new AuthUserDto
         {
-            userId = User.FindFirstValue(ClaimTypes.NameIdentifier),
-            username = User.FindFirstValue(ClaimTypes.Name),
-            email = User.FindFirstValue(ClaimTypes.Email),
-            firstName = User.FindFirstValue("firstName"),
-            lastName = User.FindFirstValue("lastName"),
-            roles = User.FindAll(ClaimTypes.Role).Select(r => r.Value).ToList()
-        });
+            UserId =
+                User.FindFirstValue(
+                    ClaimTypes.NameIdentifier) ?? "",
+
+            Username =
+                User.FindFirstValue(
+                    ClaimTypes.Name) ?? "",
+
+            Email =
+                User.FindFirstValue(
+                    ClaimTypes.Email) ?? "",
+
+            FirstName =
+                User.FindFirstValue(
+                    "firstName") ?? "",
+
+            LastName =
+                User.FindFirstValue(
+                    "lastName") ?? "",
+
+            Roles =
+                User.FindAll(
+                        ClaimTypes.Role)
+                    .Select(role =>
+                        role.Value)
+                    .ToList()
+        };
+
+        var result =
+            await _authService
+                .GetUserDetailsAsync(user);
+
+        if (!result.Success)
+        {
+            return StatusCode(
+                result.StatusCode,
+                result.Error);
+        }
+
+        return Ok(
+            result.Data);
     }
+
+    // =======================================================
+    // generate backend auth token
+    // =======================================================
 
     private string GenerateJwt(UserLoginRow user, List<string> roles)
     {
